@@ -1,0 +1,10 @@
+matplotlib
+pandas
+requests
+tqdm
+torch
+numpy
+pyarrow
+onnx
+thop
+tensorrboard
