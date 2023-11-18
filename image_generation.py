@@ -18,7 +18,7 @@ def create_ohlc_image(prices, config):
                                    figsize=(len(prices) * config['width_factor'], config['height']),
                                    facecolor='black', dpi=config['dpi'])
 
-    ax1.plot(prices.index, prices['ma20'], color='white', linewidth=0.5)
+    ax1.plot(prices.index, prices['ma'], color='white', linewidth=0.5)
     ax1.vlines(prices.index, prices['Low'], prices['High'], color='white', linewidth=1)
     ax1.scatter(prices.index, prices['Open'], marker='_', color='white', s=10)
     ax1.scatter(prices.index, prices['Close'], marker='_', color='white', s=10)
@@ -195,9 +195,9 @@ def generate_price_image(df, image_size, show_volume=True):
     df_norm['Volume'] = df_norm['Volume'].apply(np.floor).astype(int)
 
     # Scale price data to fit the price section of the image
-    df_norm[['Open', 'High', 'Low', 'Close', 'ma']] *= price_section_height
-    df_norm[['Open', 'High', 'Low', 'Close', 'ma']] = df_norm[['Open', 'High', 'Low', 'Close', 'ma20']].apply(np.floor).astype(int)
-    
+    df_norm[['Open', 'High', 'Low', 'Close', 'ma']] *= (price_section_height - 1)
+    df_norm[['Open', 'High', 'Low', 'Close', 'ma']] = df_norm[['Open', 'High', 'Low', 'Close', 'ma']].apply(np.floor).astype(int)
+
     # Move the price plot up by adding an offset
     price_offset = volume_section_height
     df_norm[['Open', 'High', 'Low', 'Close', 'ma']] += price_offset
@@ -233,7 +233,7 @@ def generate_price_image(df, image_size, show_volume=True):
             prev_ma_p = df_norm.iloc[i - 1]['ma']
             draw_line(image, prev_ma_p, (i - 1) * 3 + 1, ma_p, i * 3 + 1)
 
-    return image
+    return np.flipud(image)
 
 
 

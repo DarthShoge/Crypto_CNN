@@ -139,3 +139,4 @@ dmypy.json
 
 *.pt
 monthly_20d
+raw_data
