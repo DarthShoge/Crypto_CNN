@@ -189,10 +189,14 @@ def generate_price_image(df, image_size, show_volume=True):
     # Normalize Volume to fit the designated area of the image
     volume_section_height = image_size[0] // 4
     price_section_height = image_size[0] - volume_section_height
-
-    max_volume = df['Volume'].max()
-    df_norm['Volume'] = (df['Volume'] / max_volume) * volume_section_height
-    df_norm['Volume'] = df_norm['Volume'].apply(np.floor).astype(int)
+    
+    if df['Volume'].sum() == 0:
+        show_volume = False
+    
+    if show_volume:
+        max_volume = df['Volume'].max()
+        df_norm['Volume'] = (df['Volume'] / max_volume) * volume_section_height
+        df_norm['Volume'] = df_norm['Volume'].apply(np.floor).astype(int)
 
     # Scale price data to fit the price section of the image
     df_norm[['Open', 'High', 'Low', 'Close', 'ma']] *= (price_section_height - 1)

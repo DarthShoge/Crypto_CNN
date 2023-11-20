@@ -41,19 +41,19 @@ def display_image(image):
     plt.show()
     pass
 
-# Example usage:
-year_to_load = 1993
-image_dim = 20  # Assuming you want to load images of dimension 20x20
-file_path = "./"  # The path to your .dat files
+# # Example usage:
+# year_to_load = 1993
+# image_dim = 20  # Assuming you want to load images of dimension 20x20
+# file_path = "./"  # The path to your .dat files
 
-# Load images for the specified year
-images = load_images_from_dat(file_path, year_to_load, image_dim)
+# # Load images for the specified year
+# images = load_images_from_dat(file_path, year_to_load, image_dim)
 
-# Display the first image
-if images.size > 0:
-    display_image(images[1])
-else:
-    print("No images were loaded. Please check the file path and dimensions.")
+# # Display the first image
+# if images.size > 0:
+#     display_image(images[1])
+# else:
+#     print("No images were loaded. Please check the file path and dimensions.")
 
 
-labels_df = pd.read_feather(os.path.join("", f"20d_month_has_vb_[{image_dim}]_ma_{year_to_load}_labels_w_delay.feather"))
+# labels_df = pd.read_feather(os.path.join("", f"20d_month_has_vb_[{image_dim}]_ma_{year_to_load}_labels_w_delay.feather"))

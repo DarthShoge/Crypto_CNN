@@ -8,3 +8,5 @@ pyarrow
 onnx
 thop
 tensorrboard
+python-dotenv
+aiohttp
