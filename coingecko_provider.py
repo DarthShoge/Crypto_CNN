@@ -142,11 +142,8 @@ default_exlusions = [
     ]
 
 async def get_datapoints(ids, data_days, api: CoinGeckoAPI):
-    print(f'BEGIN EXTRACT AT {datetime.now().strftime("%H:%M:%S")}')
     all_data = await api.get_multi_asset_market_data(ids, data_days)
     all_dfs = [api.raw_data_to_dataframe(k,v) for k,v in all_data.items()]
-    print(f'ENDED {datetime.now().strftime("%H:%M:%S")}')
-
     df_merged = reduce(lambda left, right: left.join(right), all_dfs)
     return df_merged
 
