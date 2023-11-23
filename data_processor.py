@@ -5,6 +5,7 @@ import dotenv
 import asyncio
 import pickle
 from datetime import datetime
+from tqdm.asyncio import trange
 
 from image_explorer import display_image
 from image_generation import generate_price_image
@@ -86,7 +87,7 @@ async def process_single_file(cg_map, cg_api, ticker):
     return processed_asset
 
 
-def process_label_df(ticker, asset_df, offset, window, lookahead):
+def process_label_and_images_df(ticker, asset_df, offset, window, lookahead):
     full_period = window + lookahead
 
     result_df = pd.DataFrame(columns=[
@@ -102,41 +103,44 @@ def process_label_df(ticker, asset_df, offset, window, lookahead):
 
 
     for i in range(offset, len(asset_df) - full_period, full_period):
-    # Define the period for the current window
-        start_date = asset_df.iloc[i]['Timestamp']
-        end_date = asset_df.iloc[i + window - 1]['Timestamp']
-        lookahead_end_date = asset_df.iloc[i + full_period - 1]['Timestamp']
+        try:
+            # Define the period for the current window
+            start_date = asset_df.iloc[i]['Timestamp']
+            end_date = asset_df.iloc[i + window - 1]['Timestamp']
+            lookahead_end_date = asset_df.iloc[i + full_period - 1]['Timestamp']
 
-    # Get the current block of data
-        window_data = asset_df.iloc[i:i + window]
+            # Get the current block of data
+            window_data = asset_df.iloc[i:i + window]
 
-    # Generate the image
-        image = generate_price_image(window_data, (64, 48))
-    
-    # Calculate returns
-        start_price = asset_df.iloc[i]['Close']
-        market_cap = asset_df.iloc[i]['mcap']
-        end_price = asset_df.iloc[i + window - 1]['Close']
-        lookahead_price = asset_df.iloc[i + full_period - 1]['Close']
-    
-        daily_return = (end_price - start_price) / start_price
-        full_period_return = (lookahead_price - start_price) / start_price
-        lookahead_return = asset_df.iloc[i + window: i + full_period]['Close'].pct_change().sum()
+            # Generate the image
+            image = generate_price_image(window_data, (64, 48))
+        
+            # Calculate returns
+            start_price = asset_df.iloc[i]['Close']
+            market_cap = asset_df.iloc[i]['mcap']
+            end_price = asset_df.iloc[i + window - 1]['Close']
+            lookahead_price = asset_df.iloc[i + full_period - 1]['Close']
+        
+            daily_return = (end_price - start_price) / start_price
+            full_period_return = (lookahead_price - start_price) / start_price
+            lookahead_return = asset_df.iloc[i + window: i + full_period]['Close'].pct_change().sum()
 
-    # Store the results in the new DataFrame
-        result_df = result_df._append({
-        'Asset': ticker, 
-        'Start_Date': start_date, 
-        'End_Date': lookahead_end_date, 
-        'Daily_Return': daily_return, 
-        f'Ret_{full_period}H': full_period_return, 
-        f'Ret_{lookahead}H': lookahead_return, 
-        'Market_Cap': market_cap,	
-        'Image': image
-    }, ignore_index=True)
+            # Store the results in the new DataFrame
+            result_df = result_df._append({
+            'Asset': ticker, 
+            'Start_Date': start_date, 
+            'End_Date': lookahead_end_date, 
+            'Daily_Return': daily_return, 
+            f'Ret_{full_period}H': full_period_return, 
+            f'Ret_{lookahead}H': lookahead_return, 
+            'Market_Cap': market_cap,	
+            'Image': image
+        }, ignore_index=True)
+        except Exception as e:
+            print(f"Error processing {ticker} at index {i}: {e}")
     return result_df
 
-def process_asset(args):
+def process_asset_parallel(args):
     """
     Wrapper function for processing a single asset.
     This function will be called in parallel for different tickers.
@@ -150,7 +154,7 @@ def process_asset(args):
         # Running the asynchronous function to completion
         processed_asset = loop.run_until_complete(process_single_file(cg_map, cg_api, ticker))
 
-        label_data = process_label_df(ticker, processed_asset, offset, window, lookahead)
+        label_data = process_label_and_images_df(ticker, processed_asset, offset, window, lookahead)
         return label_data
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
@@ -158,19 +162,33 @@ def process_asset(args):
     
     
 
-def create_all_labels_and_images(asset_list, cg_map, cg_api, offset, window, lookahead, num_processes=4):
+def create_all_labels_and_images_parallel(asset_list, cg_map, cg_api, offset, window, lookahead, num_processes=4):
     """
     Processes all assets in parallel using multiprocessing with a tqdm progress bar.
     """
     # Prepare arguments for each process
     args = [(ticker, cg_map, cg_api, offset, window, lookahead) for ticker in asset_list]
-
     # Use process_map instead of Pool.map to get the tqdm progress bar
-    datasets = process_map(process_asset, args, max_workers=num_processes, chunksize=1)
-
+    datasets = process_map(process_asset_parallel, args, max_workers=num_processes, chunksize=1)
     # Concatenate all DataFrames into a single DataFrame
     datasets_df = pd.concat(datasets, ignore_index=True)
 
+    return datasets_df
+
+
+async def create_all_labels_and_images(asset_list, cg_map, cg_api, offset, window, lookahead):
+    """
+    Processes all assets sequentially with a tqdm progress bar.
+    """
+    datasets = []
+    for i in trange(len(asset_list), desc="Processing assets"):
+        ticker = asset_list[i]
+        processed_asset = await process_single_file(cg_map, cg_api, ticker)
+        dataset = process_label_and_images_df(ticker, processed_asset, offset, window, lookahead)
+        datasets.append(dataset)
+
+    # Concatenate all DataFrames into a single DataFrame
+    datasets_df = pd.concat(datasets, ignore_index=True)
     return datasets_df
 
 # Example usage
@@ -184,7 +202,8 @@ if __name__ == "__main__":
     window = 16
     lookahead = 8
     # Call the function with multiprocessing
-    output_df = create_all_labels_and_images(asset_list, cg_map, cg_api, offset, window, lookahead, num_processes=8)
+    # output_df = asyncio.run( create_all_labels_and_images(asset_list, cg_map, cg_api, offset, window, lookahead))
+    output_df = create_all_labels_and_images_parallel(asset_list, cg_map, cg_api, offset, window, lookahead)
     output_df = output_df.sort_values('Start_Date')
     # Define file paths
     output_file_path = f'./crypto/data/{offset}_{window}_{lookahead}_labels_{datetime.now().strftime("%Y%m%d%H%M%S")}.feather'
@@ -199,5 +218,5 @@ if __name__ == "__main__":
 
     print(f"Data saved to {output_file_path} and {images_dat_path}")
     
-loaded_df = pd.read_feather('./crypto/data/240_16_8_labels.feather')
-images = pickle.load(open('./crypto/data/240_16_8_images.dat', 'rb'))
+# loaded_df = pd.read_feather('./crypto/data/240_16_8_labels.feather')
+# images = pickle.load(open('./crypto/data/240_16_8_images.dat', 'rb'))

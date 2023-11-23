@@ -140,6 +140,8 @@ def draw_line(image, start_y, start_x, end_y, end_x):
         for x in range(start_x, end_x + 1):
             image[y, x] = 255
             y += ystep
+            
+
 
 def generate_price_image(df, image_size, show_volume=True):
     """
@@ -182,6 +184,7 @@ def generate_price_image(df, image_size, show_volume=True):
 
     """
     # Normalize OHLC values and ma20 to fit the image dimensions
+    processing_columns = ['Open', 'High', 'Low', 'Close', 'ma']
     min_price = df[['Open', 'High', 'Low', 'Close', 'ma']].min().min()
     max_price = df[['Open', 'High', 'Low', 'Close', 'ma']].max().max()
     df_norm = (df[['Open', 'High', 'Low', 'Close', 'ma']] - min_price) / (max_price - min_price)
@@ -200,7 +203,8 @@ def generate_price_image(df, image_size, show_volume=True):
 
     # Scale price data to fit the price section of the image
     df_norm[['Open', 'High', 'Low', 'Close', 'ma']] *= (price_section_height - 1)
-    df_norm[['Open', 'High', 'Low', 'Close', 'ma']] = df_norm[['Open', 'High', 'Low', 'Close', 'ma']].apply(np.floor).astype(int)
+    df_norm[processing_columns] = df_norm[processing_columns].replace([np.inf, -np.inf], np.nan).fillna(0)
+    df_norm[processing_columns] = df_norm[processing_columns].apply(np.floor).astype(int)
 
     # Move the price plot up by adding an offset
     price_offset = volume_section_height
