@@ -1,6 +1,7 @@
 import json
 import os
 import pandas as pd
+import numpy as np
 import dotenv
 import asyncio
 import pickle
@@ -87,52 +88,59 @@ async def process_single_file(cg_map, cg_api, ticker):
     return processed_asset
 
 
-def process_label_and_images_df(ticker, asset_df, offset, window, lookahead):
-    full_period = window + lookahead
+def process_label_and_images_df(ticker, asset_df, offset, window, short_period, full_period=24, image_size=(64, 48), from_time='09:00:00'):
 
     result_df = pd.DataFrame(columns=[
     'Asset',
     'Start_Date', 
+    'Predict_Date',
     'End_Date', 
     'Daily_Return', 
     f'Ret_{full_period}H', 
-    f'Ret_{lookahead}H', 
+    f'Ret_{short_period}H', 
+    f'Log_Ret_{full_period}H',
+    f'Log_Ret_{short_period}H',
     'Market_Cap', 
     'Image'])
 
+    # Calculate the index of the first window
+    time_offset = asset_df[asset_df['Timestamp'].dt.time == pd.to_datetime(from_time).time()].index.min()
 
-
-    for i in range(offset, len(asset_df) - full_period, full_period):
+    for i in range(offset+time_offset, len(asset_df) - (full_period + window), full_period):
         try:
-            # Define the period for the current window
             start_date = asset_df.iloc[i]['Timestamp']
-            end_date = asset_df.iloc[i + window - 1]['Timestamp']
-            lookahead_end_date = asset_df.iloc[i + full_period - 1]['Timestamp']
+            predict_date = asset_df.iloc[i + window]['Timestamp']
+            # end_date = asset_df.iloc[i + window]['Timestamp']
+            end_date = asset_df.iloc[i + window + full_period]['Timestamp']
 
             # Get the current block of data
             window_data = asset_df.iloc[i:i + window]
 
             # Generate the image
-            image = generate_price_image(window_data, (64, 48))
+            image = generate_price_image(window_data, image_size)
         
             # Calculate returns
-            start_price = asset_df.iloc[i]['Close']
-            market_cap = asset_df.iloc[i]['mcap']
-            end_price = asset_df.iloc[i + window - 1]['Close']
-            lookahead_price = asset_df.iloc[i + full_period - 1]['Close']
-        
-            daily_return = (end_price - start_price) / start_price
-            full_period_return = (lookahead_price - start_price) / start_price
-            lookahead_return = asset_df.iloc[i + window: i + full_period]['Close'].pct_change().sum()
+            start_price = asset_df.iloc[i + window]['Close']
+            market_cap = asset_df.iloc[i + window]['mcap']
+            s_period_end_price = asset_df.iloc[i + window + short_period]['Close']
+            f_period_end_price = asset_df.iloc[i + window + full_period]['Close']
+            
+            short_period_log_return = np.log(s_period_end_price / start_price)
+            long_period_log_return = np.log(s_period_end_price / start_price)
+            
+            short_period_return = (s_period_end_price - start_price) / start_price
+            full_period_return = (f_period_end_price - start_price) / start_price
 
             # Store the results in the new DataFrame
             result_df = result_df._append({
             'Asset': ticker, 
             'Start_Date': start_date, 
-            'End_Date': lookahead_end_date, 
-            'Daily_Return': daily_return, 
+            'Predict_Date': predict_date, 
+            'End_Date': end_date, 
             f'Ret_{full_period}H': full_period_return, 
-            f'Ret_{lookahead}H': lookahead_return, 
+            f'Ret_{short_period}H': short_period_return, 
+            f'Log_Ret_{full_period}H': long_period_log_return,
+            f'Log_Ret_{short_period}H': short_period_log_return,
             'Market_Cap': market_cap,	
             'Image': image
         }, ignore_index=True)
@@ -148,6 +156,7 @@ def process_asset_parallel(args):
     """
     try:
         ticker, cg_map, cg_api, offset, window, lookahead = args
+        print(f"Processing {ticker}")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
